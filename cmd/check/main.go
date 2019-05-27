@@ -27,22 +27,33 @@ func main() {
 		os.Exit(1)
 	}
 
-	hostKeyGetter := proxy.NewHostKey()
-	socks5Proxy := proxy.NewSocks5Proxy(hostKeyGetter, log.New(ioutil.Discard, "", log.LstdFlags))
-	cliCoordinator := bosh.NewCLICoordinator(checkRequest.Source, os.Stderr, socks5Proxy)
-	commandRunner := bosh.NewCommandRunner(cliCoordinator)
-	cliDirector, err := cliCoordinator.Director()
-	if err != nil {
-		fmt.Fprint(os.Stderr, err)
-		os.Exit(1)
-	}
-	director := bosh.NewBoshDirector(checkRequest.Source, commandRunner, cliDirector)
+	var checkResponse []concourse.Version
 
-	checkCommand := check.NewCheckCommand(director)
-	checkResponse, err := checkCommand.Run(checkRequest)
-	if err != nil {
-		fmt.Fprint(os.Stderr, err)
-		os.Exit(1)
+	if checkRequest.Source.SkipCheck {
+		checkResponse = []concourse.Version{}
+	} else {
+		hostKeyGetter := proxy.NewHostKey()
+		socks5Proxy := proxy.NewSocks5Proxy(hostKeyGetter, log.New(ioutil.Discard, "", log.LstdFlags))
+		cliCoordinator := bosh.NewCLICoordinator(checkRequest.Source, os.Stderr, socks5Proxy)
+		commandRunner := bosh.NewCommandRunner(cliCoordinator)
+		cliDirector, err := cliCoordinator.Director()
+		if err != nil {
+			fmt.Fprint(os.Stderr, err)
+			os.Exit(1)
+		}
+
+		director := bosh.NewBoshDirector(
+			checkRequest.Source,
+			commandRunner,
+			cliDirector,
+		)
+
+		checkCommand := check.NewCheckCommand(director)
+		checkResponse, err = checkCommand.Run(checkRequest)
+		if err != nil {
+			fmt.Fprint(os.Stderr, err)
+			os.Exit(1)
+		}
 	}
 
 	concourseOutputFormatted, err := json.MarshalIndent(checkResponse, "", "  ")
